@@ -1,6 +1,6 @@
 {
   "youtube_url": "https://www.youtube.com/live/NluaCVnEV7I",
-  "output_dir": "G:\\Mój dysk\\Kazania",
+  "output_dir": "C:\\Users\\<nazwa_uzytkownika>\\Desktop\\Kazania",
   "whisper_model": "small",
   "language": "pl",
   "keep_audio": false,

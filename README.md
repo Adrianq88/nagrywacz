@@ -32,10 +32,27 @@ Jak to działa:
    ```
    (po instalacji zrestartuj terminal/laptop, żeby PATH się odświeżył).
 
-3. **Dysk Google (Google Drive for desktop)** — zainstaluj z
-   [google.com/drive/download](https://www.google.com/drive/download/),
-   zaloguj na konto taty. Utwórz w nim folder np. `Kazania`
-   (domyślnie widoczny jako `G:\Mój dysk\Kazania`).
+3. **Dysk Google (Google Drive for desktop)** — konto logowania nie ma
+   znaczenia (może być Twoje, taty albo dowolne inne), bo i tak folder
+   udostępnimy dalej. Zależy nam, żeby tata miał **zwykły folder na
+   Pulpicie**, więc korzystamy z funkcji "kopia zapasowa folderu z
+   komputera" (Backup and sync), a nie z mountowania `G:\`:
+   1. Zainstaluj z [google.com/drive/download](https://www.google.com/drive/download/)
+      i zaloguj na wybrane konto Google.
+   2. Utwórz zwykły folder na Pulpicie taty: `C:\Users\<nazwa_uzytkownika>\Desktop\Kazania`.
+   3. W ustawieniach apki Dysk Google → **Foldery z tego komputera** → dodaj
+      ten folder (`Kazania`) do kopii zapasowej, tryb synchronizacji: **Mirror
+      files** (nie "Stream") — dzięki temu pliki fizycznie leżą na dysku
+      laptopa (widoczne od razu, nawet offline) i jednocześnie wysyłają się
+      do chmury w tle.
+   4. Na [drive.google.com](https://drive.google.com) odszukaj ten folder
+      (pojawi się pod "Computers" → nazwa laptopa → Kazania), kliknij prawym
+      → **Udostępnij** → dodaj adres e-mail Twój i/lub taty (jeśli to inne
+      konto niż zalogowane). Dzięki temu oboje macie podgląd z telefonu/
+      przeglądarki, niezależnie na czyje konto poszła kopia zapasowa.
+
+   Tata i tak nigdy nie musi wchodzić na drive.google.com — dla niego to po
+   prostu folder `Kazania` na Pulpicie.
 
 4. **Ten projekt** — skopiuj folder `nagrywacz` na laptopa, np. do
    `C:\Nagrywacz`.
@@ -51,7 +68,7 @@ Jak to działa:
    ```json
    {
      "youtube_url": "https://www.youtube.com/live/NluaCVnEV7I",
-     "output_dir": "G:\\Mój dysk\\Kazania",
+     "output_dir": "C:\\Users\\<nazwa_uzytkownika>\\Desktop\\Kazania",
      "whisper_model": "small",
      "language": "pl",
      "keep_audio": false,
@@ -59,8 +76,9 @@ Jak to działa:
    }
    ```
    Link do stałego streamu kościoła jest już wpisany domyślnie — trzeba
-   tylko poprawić `output_dir` na faktyczną ścieżkę folderu na Dysku
-   Google taty.
+   tylko poprawić `<nazwa_uzytkownika>` w `output_dir` na faktyczną nazwę
+   konta Windows taty (ten sam folder co w kroku 3, żeby pliki od razu
+   wpadały pod kopię zapasową).
    - `whisper_model`: `small` jest szybki i wystarczająco dokładny na
      zwykłym CPU; jeśli jakość tekstu będzie za słaba, zmień na `medium`
      (wolniejsze, dokładniejsze).
@@ -73,7 +91,9 @@ Jak to działa:
    ```
    venv\Scripts\python.exe src\record_transcribe.py --config config.json
    ```
-   Sprawdź plik w `logs\` oraz wynikowy `.txt` w folderze na Dysku Google.
+   Sprawdź plik w `logs\` oraz wynikowy `.txt` w folderze `Kazania` na
+   Pulpicie (a po chwili też na drive.google.com — apka synchronizuje w
+   tle).
 
 8. **Harmonogram** — w PowerShell **jako Administrator**:
    ```
