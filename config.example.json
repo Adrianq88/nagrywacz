@@ -1,0 +1,8 @@
+{
+  "youtube_url": "https://www.youtube.com/watch?v=XXXXXXXXXXX",
+  "output_dir": "G:\\Mój dysk\\Kazania",
+  "whisper_model": "small",
+  "language": "pl",
+  "keep_audio": false,
+  "wait_for_video_seconds": 1800
+}
