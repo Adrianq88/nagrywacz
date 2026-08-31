@@ -1,9 +1,15 @@
-"""Nagrywa niedzielna transmisje mszy z YouTube i zapisuje samą transkrypcję.
+"""Nagrywa niedzielna transmisje mszy z YouTube (stream 24/7) i zapisuje
+samą transkrypcję.
 
 Uzycie:
     python record_transcribe.py --config config.json
 
-Wymaga zainstalowanego ffmpeg w PATH (yt-dlp uzywa go do wyciagniecia audio).
+Zrodlowy stream leci non-stop, wiec skrypt nie czeka az sie "zacznie" -
+po prostu rozwiazuje aktualny adres strumienia i nagrywa go przez ustalony
+czas (record_duration_minutes w konfiguracji), zaczynajac dokladnie w
+momencie uruchomienia (patrz Harmonogram zadan / scripts/install_task.ps1).
+
+Wymaga yt-dlp oraz ffmpeg w PATH.
 """
 
 import argparse
@@ -37,29 +43,35 @@ def setup_logging(log_dir: Path) -> None:
     )
 
 
-def download_audio(url: str, dest_stem: Path, wait_seconds: int) -> Path:
-    """Pobiera (lub czeka na start i nagrywa) transmisje na zywo, zwraca sciezke do pliku mp3."""
-    output_template = str(dest_stem) + ".%(ext)s"
+def resolve_stream_url(url: str) -> str:
+    """Rozwiazuje biezacy adres strumienia audio dla transmisji na zywo."""
+    cmd = ["yt-dlp", "-f", "bestaudio/best", "--get-url", url]
+    logger.info("Rozwiazuje adres strumienia: %s", " ".join(cmd))
+    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    stream_url = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else ""
+    if not stream_url:
+        raise RuntimeError("yt-dlp nie zwrocil adresu strumienia (transmisja offline?)")
+    return stream_url
+
+
+def record_audio(url: str, dest_path: Path, duration_seconds: int) -> Path:
+    """Nagrywa fragment strumienia na zywo o zadanej dlugosci, zwraca sciezke do pliku mp3."""
+    stream_url = resolve_stream_url(url)
     cmd = [
-        "yt-dlp",
-        url,
-        "-f", "bestaudio/best",
-        "--extract-audio",
-        "--audio-format", "mp3",
-        "--audio-quality", "5",
-        "--live-from-start",
-        "--wait-for-video", str(wait_seconds),
-        "--no-part",
-        "--newline",
-        "-o", output_template,
+        "ffmpeg", "-y",
+        "-i", stream_url,
+        "-t", str(duration_seconds),
+        "-vn",
+        "-acodec", "libmp3lame",
+        "-q:a", "5",
+        str(dest_path),
     ]
-    logger.info("Startuje yt-dlp: %s", " ".join(cmd))
+    logger.info("Nagrywam %d s audio ze strumienia...", duration_seconds)
     subprocess.run(cmd, check=True)
 
-    audio_path = dest_stem.with_suffix(".mp3")
-    if not audio_path.exists():
-        raise FileNotFoundError(f"yt-dlp nie utworzyl oczekiwanego pliku {audio_path}")
-    return audio_path
+    if not dest_path.exists():
+        raise FileNotFoundError(f"ffmpeg nie utworzyl oczekiwanego pliku {dest_path}")
+    return dest_path
 
 
 def transcribe(audio_path: Path, language: str, model_size: str) -> str:
@@ -102,19 +114,16 @@ def main() -> int:
         return 1
 
     today = datetime.date.today().isoformat()
-    tmp_audio_stem = output_dir / f"_tmp_msza_{today}"
+    tmp_audio_path = output_dir / f"_tmp_msza_{today}.mp3"
     text_path = output_dir / f"kazanie_{today}.txt"
+    duration_seconds = int(config.get("record_duration_minutes", 95)) * 60
 
     try:
-        audio_path = download_audio(
-            config["youtube_url"],
-            tmp_audio_stem,
-            int(config.get("wait_for_video_seconds", 1800)),
-        )
+        audio_path = record_audio(config["youtube_url"], tmp_audio_path, duration_seconds)
     except subprocess.CalledProcessError as exc:
-        logger.error("Pobieranie transmisji nie powiodlo sie: %s", exc)
+        logger.error("Nagrywanie transmisji nie powiodlo sie: %s", exc)
         return 1
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, RuntimeError) as exc:
         logger.error(str(exc))
         return 1
 

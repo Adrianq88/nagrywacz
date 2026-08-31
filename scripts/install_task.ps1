@@ -1,5 +1,7 @@
-# Rejestruje w Harmonogramie zadan Windows cotygodniowe zadanie: kazda niedziela 9:50.
-# 9:50 (10 min przed msza), zeby yt-dlp zdazyl zlapac poczatek transmisji.
+# Rejestruje w Harmonogramie zadan Windows cotygodniowe zadanie: kazda niedziela 9:55.
+# Stream kosciola leci 24/7, wiec skrypt nie czeka az sie "zacznie" - startuje
+# nagrywanie dokladnie o tej godzinie i nagrywa przez record_duration_minutes
+# (patrz config.json), czyli 5 min przed msza + zapas na przeciagniecie sie.
 #
 # Uruchom w PowerShell JAKO ADMINISTRATOR:
 #   powershell -ExecutionPolicy Bypass -File install_task.ps1
@@ -11,7 +13,7 @@ $RunScript = Join-Path $ProjectRoot "scripts\run_weekly.ps1"
 $Action = New-ScheduledTaskAction -Execute "powershell.exe" `
     -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$RunScript`""
 
-$Trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At 9:50AM
+$Trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At 9:55AM
 
 $Settings = New-ScheduledTaskSettingsSet `
     -WakeToRun `

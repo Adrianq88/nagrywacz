@@ -4,11 +4,17 @@ Automatycznie nagrywa niedzielna transmisje mszy z YouTube i zapisuje **samą
 transkrypcję** kazania (tekst) do folderu zsynchronizowanego z Dyskiem
 Google — żeby po powrocie z pracy plik po prostu tam był.
 
+Stream z kościoła leci **24/7** (kamera w kościele, nie tylko podczas mszy),
+więc nie da się "poczekać aż się zacznie" — trzeba po prostu zacząć
+nagrywać o właściwej godzinie i nagrywać przez ustalony czas.
+
 Jak to działa:
 
-1. W niedzielę o 9:50 Harmonogram zadań Windows uruchamia skrypt.
-2. `yt-dlp` czeka aż transmisja wystartuje i nagrywa ją od początku
-   (`--live-from-start`), wyciągając od razu samo audio (mp3).
+1. W niedzielę o 9:55 Harmonogram zadań Windows uruchamia skrypt.
+2. `yt-dlp` rozwiązuje aktualny adres strumienia, a `ffmpeg` nagrywa z niego
+   audio (mp3) przez `record_duration_minutes` (domyślnie 95 min: 5 min
+   zapasu przed mszą + 60 min mszy + 30 min zapasu, gdyby się przeciągnęła),
+   po czym czysto kończy plik.
 3. `faster-whisper` (offline, model rozpoznawania mowy) transkrybuje audio
    na polski tekst.
 4. Wynik trafia jako `kazanie_RRRR-MM-DD.txt` do folderu na Dysku Google.
@@ -44,19 +50,23 @@ Jak to działa:
    uzupełnij:
    ```json
    {
-     "youtube_url": "<link do transmisji/kanału>",
+     "youtube_url": "https://www.youtube.com/live/NluaCVnEV7I",
      "output_dir": "G:\\Mój dysk\\Kazania",
      "whisper_model": "small",
      "language": "pl",
      "keep_audio": false,
-     "wait_for_video_seconds": 1800
+     "record_duration_minutes": 95
    }
    ```
+   Link do stałego streamu kościoła jest już wpisany domyślnie — trzeba
+   tylko poprawić `output_dir` na faktyczną ścieżkę folderu na Dysku
+   Google taty.
    - `whisper_model`: `small` jest szybki i wystarczająco dokładny na
      zwykłym CPU; jeśli jakość tekstu będzie za słaba, zmień na `medium`
      (wolniejsze, dokładniejsze).
-   - `wait_for_video_seconds`: jak długo yt-dlp ma czekać, aż transmisja
-     się zacznie (1800 = 30 min).
+   - `record_duration_minutes`: jak długo nagrywać licząc od momentu
+     uruchomienia zadania (9:55). Zwiększ, jeśli msza regularnie się
+     przeciąga.
 
 7. **Test ręczny** (najlepiej na już zakończonej/aktualnie trwającej
    transmisji, żeby sprawdzić, czy wszystko działa):
@@ -69,23 +79,26 @@ Jak to działa:
    ```
    powershell -ExecutionPolicy Bypass -File scripts\install_task.ps1
    ```
-   Utworzy to zadanie "NagrywaczMszy" uruchamiane co niedzielę o 9:50.
+   Utworzy to zadanie "NagrywaczMszy" uruchamiane co niedzielę o 9:55.
 
 9. **Ustawienia zasilania** — żeby laptop faktycznie odpalił zadanie:
    - Panel sterowania → Opcje zasilania → Zmień ustawienia planu →
      Zaawansowane ustawienia zasilania → Sen → **Zezwalaj na czasomierze
      pobudki: Włącz**.
    - Laptop powinien być podłączony do zasilania i **nie** całkowicie
-     wyłączony (może być uśpiony) w niedzielę przed 9:50.
+     wyłączony (może być uśpiony) w niedzielę przed 9:55.
 
 Żeby usunąć zadanie: `powershell -ExecutionPolicy Bypass -File scripts\uninstall_task.ps1`
 (jako Administrator).
 
 ## Uwagi
 
-- Jeśli link do transmisji zmienia się co tydzień, wystarczy podmienić
-  `youtube_url` w `config.json` przed niedzielą.
-- Jeśli msza czasem się przeciąga, to nie problem — yt-dlp nagrywa aż
-  transmisja się skończy, niezależnie od zaplanowanej godziny startu.
+- Stream jest stały 24/7, więc `record_duration_minutes` decyduje o tym,
+  ile realnie nagrywamy — jeśli msza regularnie się przeciąga, zwiększ tę
+  wartość w `config.json`.
 - Wszystkie logi z każdego uruchomienia lądują w `logs\log_RRRR-MM-DD_HHMM.txt`
   — przydatne do diagnozowania, gdyby coś nie zadziałało.
+- Do testu ręcznego (krok 7) nie trzeba czekać na niedzielę — skrypt zawsze
+  nagrywa to, co aktualnie leci na streamie, więc zadziała o każdej porze
+  (nawet gdy w kościele ciemno i cicho — dobre do sprawdzenia, że cały
+  pipeline działa techniczne, choć transkrypcja wyjdzie wtedy pusta/losowa).
