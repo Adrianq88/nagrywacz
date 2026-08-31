@@ -7,9 +7,14 @@ Uzycie:
 Zrodlowy stream leci non-stop, wiec skrypt nie czeka az sie "zacznie" -
 po prostu rozwiazuje aktualny adres strumienia i nagrywa go przez ustalony
 czas (record_duration_minutes w konfiguracji), zaczynajac dokladnie w
-momencie uruchomienia (patrz Harmonogram zadan / scripts/install_task.ps1).
+momencie uruchomienia (patrz cron / scripts/install_cron.sh).
 
-Wymaga yt-dlp oraz ffmpeg w PATH.
+Mysli jako proces dzialajacy na headless VPS (bez GUI): autoryzacja do
+YouTube idzie przez plik cookies (cookies_file), a wynikowy plik tekstowy
+wysylany jest na Dysk Google przez rclone (rclone_remote) zamiast apki
+z GUI.
+
+Wymaga yt-dlp, ffmpeg oraz (opcjonalnie) rclone w PATH.
 """
 
 import argparse
@@ -43,20 +48,23 @@ def setup_logging(log_dir: Path) -> None:
     )
 
 
-def resolve_stream_url(url: str) -> str:
+def resolve_stream_url(url: str, cookies_file: str | None) -> str:
     """Rozwiazuje biezacy adres strumienia audio dla transmisji na zywo."""
-    cmd = ["yt-dlp", "-f", "bestaudio/best", "--get-url", url]
+    cmd = ["yt-dlp", "-f", "bestaudio/best", "--get-url"]
+    if cookies_file:
+        cmd += ["--cookies", cookies_file]
+    cmd.append(url)
     logger.info("Rozwiazuje adres strumienia: %s", " ".join(cmd))
     result = subprocess.run(cmd, check=True, capture_output=True, text=True)
     stream_url = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else ""
     if not stream_url:
-        raise RuntimeError("yt-dlp nie zwrocil adresu strumienia (transmisja offline?)")
+        raise RuntimeError("yt-dlp nie zwrocil adresu strumienia (transmisja offline lub blokada YouTube?)")
     return stream_url
 
 
-def record_audio(url: str, dest_path: Path, duration_seconds: int) -> Path:
+def record_audio(url: str, dest_path: Path, duration_seconds: int, cookies_file: str | None) -> Path:
     """Nagrywa fragment strumienia na zywo o zadanej dlugosci, zwraca sciezke do pliku mp3."""
-    stream_url = resolve_stream_url(url)
+    stream_url = resolve_stream_url(url, cookies_file)
     cmd = [
         "ffmpeg", "-y",
         "-i", stream_url,
@@ -88,6 +96,12 @@ def transcribe(audio_path: Path, language: str, model_size: str) -> str:
     return "\n".join(lines)
 
 
+def upload_to_drive(text_path: Path, rclone_remote: str) -> None:
+    cmd = ["rclone", "copy", str(text_path), rclone_remote]
+    logger.info("Wysylam na Dysk Google: %s", " ".join(cmd))
+    subprocess.run(cmd, check=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="config.json", help="Sciezka do pliku konfiguracyjnego JSON")
@@ -110,16 +124,17 @@ def main() -> int:
     try:
         output_dir.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        logger.error("Folder docelowy %s jest niedostepny (Dysk Google niezalogowany/niezamontowany?): %s", output_dir, exc)
+        logger.error("Folder roboczy %s jest niedostepny: %s", output_dir, exc)
         return 1
 
     today = datetime.date.today().isoformat()
     tmp_audio_path = output_dir / f"_tmp_msza_{today}.mp3"
     text_path = output_dir / f"kazanie_{today}.txt"
     duration_seconds = int(config.get("record_duration_minutes", 95)) * 60
+    cookies_file = config.get("cookies_file") or None
 
     try:
-        audio_path = record_audio(config["youtube_url"], tmp_audio_path, duration_seconds)
+        audio_path = record_audio(config["youtube_url"], tmp_audio_path, duration_seconds, cookies_file)
     except subprocess.CalledProcessError as exc:
         logger.error("Nagrywanie transmisji nie powiodlo sie: %s", exc)
         return 1
@@ -140,6 +155,15 @@ def main() -> int:
     if not config.get("keep_audio", False):
         audio_path.unlink(missing_ok=True)
         logger.info("Usunieto plik audio %s", audio_path)
+
+    rclone_remote = config.get("rclone_remote")
+    if rclone_remote:
+        try:
+            upload_to_drive(text_path, rclone_remote)
+            logger.info("Wyslano transkrypcje na Dysk Google (%s)", rclone_remote)
+        except subprocess.CalledProcessError as exc:
+            logger.error("Wysylka na Dysk Google nie powiodla sie (plik zostal lokalnie w %s): %s", text_path, exc)
+            return 1
 
     return 0
 
