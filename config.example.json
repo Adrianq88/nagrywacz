@@ -1,7 +1,7 @@
 {
   "youtube_url": "https://www.youtube.com/live/NluaCVnEV7I",
-  "output_dir": "/home/ubuntu/nagrywacz/output",
-  "cookies_file": "/home/ubuntu/nagrywacz/cookies.txt",
+  "output_dir": "/home/<TWOJA_NAZWA_UZYTKOWNIKA>/nagrywacz/output",
+  "cookies_file": "/home/<TWOJA_NAZWA_UZYTKOWNIKA>/nagrywacz/cookies.txt",
   "rclone_remote": "gdrive:Kazania",
   "whisper_model": "small",
   "language": "pl",

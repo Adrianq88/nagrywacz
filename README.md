@@ -8,13 +8,13 @@ Stream z kościoła leci **24/7** (stała kamera, nie tylko podczas mszy),
 więc nie da się "poczekać aż się zacznie" — trzeba po prostu zacząć
 nagrywać o właściwej godzinie i nagrywać przez ustalony czas.
 
-Całość działa na **darmowej maszynie w chmurze (Oracle Cloud Free Tier)**,
-a nie na niczyim domowym komputerze — dzięki temu nikt nie musi pamiętać
-o włączonym laptopie. Jedyny haczyk: YouTube blokuje pobieranie streamów
-live z adresów IP dużych centrów danych ("Sign in to confirm you're not
-a bot"), więc autoryzujemy się plikiem cookies z prawdziwego konta
-Google (patrz krok 6 poniżej) — to w zupełności wystarcza, żeby ominąć
-blokadę.
+Całość działa na **darmowej maszynie w chmurze (Google Cloud Free Tier —
+Compute Engine, `e2-micro`)**, a nie na niczyim domowym komputerze —
+dzięki temu nikt nie musi pamiętać o włączonym laptopie. Jedyny haczyk:
+YouTube blokuje pobieranie streamów live z adresów IP dużych centrów
+danych ("Sign in to confirm you're not a bot"), więc autoryzujemy się
+plikiem cookies z prawdziwego konta Google (patrz krok 6 poniżej) — to w
+zupełności wystarcza, żeby ominąć blokadę.
 
 Jak to działa:
 
@@ -30,25 +30,47 @@ Jak to działa:
    (telefon, przeglądarka).
 5. Plik audio jest domyślnie kasowany po transkrypcji.
 
-## 1. Załóż darmową maszynę (Oracle Cloud Free Tier)
+## 1. Załóż darmową maszynę (Google Cloud Free Tier)
 
-1. Wejdź na [oracle.com/cloud/free](https://www.oracle.com/cloud/free/) i
-   załóż konto (wymaga karty do weryfikacji tożsamości, ale w ramach
-   "Always Free" nic nie zostanie pobrane, jeśli zostaniesz w limitach).
-2. Utwórz instancję (Compute → Create instance):
-   - Image: **Ubuntu 22.04** (lub nowszy LTS).
-   - Shape: dowolny z oznaczeniem **"Always Free eligible"** (np.
-     `VM.Standard.E2.1.Micro` albo `VM.Standard.A1.Flex` z 1 OCPU/6GB —
-     jeśli dostępny w Twoim regionie, jest wyraźnie mocniejszy i lepszy
-     do Whispera).
-   - Zapisz wygenerowaną parę kluczy SSH (plik `.pem`) — będzie potrzebny
-     do logowania.
-3. W zakładce sieci instancji dodaj regułę **Ingress** pozwalającą na SSH
-   (port 22) z Twojego IP (albo zostaw domyślną, jeśli już jest).
-4. Połącz się:
+Skoro tata ma już konto Google Cloud, wystarczy na nim utworzyć darmową
+maszynę `e2-micro` — kwalifikuje się do "Always Free" (0 zł na zawsze,
+w ramach limitów), ale tylko w trzech regionach: `us-west1`,
+`us-central1` albo `us-east1` (USA — poza tymi trzema regionami
+"Always Free" już nie obowiązuje).
+
+1. Wejdź na [console.cloud.google.com](https://console.cloud.google.com/),
+   wybierz/utwórz projekt, w wyszukiwarce wpisz "Compute Engine" i
+   włącz API, jeśli poprosi.
+2. Utwórz instancję (Compute Engine → VM instances → Create instance):
+   - Nazwa: `nagrywacz`.
+   - Region: jeden z trzech powyżej (`us-central1` jest dobrym domyślnym
+     wyborem).
+   - Machine type: **e2-micro** (żeby zmieścić się w darmowym limicie).
+   - Boot disk: **Ubuntu 22.04 LTS**, dysk standardowy do 30 GB (mieści
+     się w darmowym limicie).
+   - Firewall: zaznacz "Allow HTTP/HTTPS" nie jest konieczne — SSH jest
+     dostępny domyślnie.
+3. Zainstaluj lokalnie [Google Cloud CLI](https://cloud.google.com/sdk/docs/install)
+   (`gcloud`) — sam ogarnia klucze SSH i autoryzację, bez ręcznego
+   zarządzania plikami `.pem`:
    ```
-   ssh -i sciezka/do/klucza.pem ubuntu@<PUBLIC_IP_INSTANCJI>
+   gcloud init
+   gcloud compute ssh nagrywacz --zone=us-central1-a
    ```
+   (podmień zone na tę, którą wybrałaś przy tworzeniu instancji).
+4. **e2-micro ma tylko 1 GB RAM**, co jest ciasne dla modelu Whisper —
+   dodaj plik wymiany (swap), żeby transkrypcja nie wywaliła się z braku
+   pamięci:
+   ```bash
+   sudo fallocate -l 2G /swapfile
+   sudo chmod 600 /swapfile
+   sudo mkswap /swapfile
+   sudo swapon /swapfile
+   echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+   ```
+
+Po zalogowaniu sprawdź swoją nazwę użytkownika (`whoami`) — będzie
+potrzebna w ścieżkach w `config.json` (krok 7) zamiast `<TWOJA_NAZWA_UZYTKOWNIKA>`.
 
 ## 2. Zainstaluj zależności na serwerze
 
@@ -112,9 +134,9 @@ tego, na czyje konto poszło rclone.
    konto Google na youtube.com.
 2. Wejdź na sam link do streamu (ten z `config.json`), kliknij ikonę
    rozszerzenia i wyeksportuj `cookies.txt` (format Netscape).
-3. Wyślij plik na serwer:
+3. Wyślij plik na serwer (gcloud sam ogarnia autoryzację):
    ```bash
-   scp -i sciezka/do/klucza.pem cookies.txt ubuntu@<PUBLIC_IP>:~/nagrywacz/cookies.txt
+   gcloud compute scp cookies.txt nagrywacz:~/nagrywacz/cookies.txt --zone=us-central1-a
    ```
 
 Cookies z czasem wygasają (zwykle po tygodniach/miesiącach) — jeśli
@@ -131,8 +153,8 @@ nano config.json
 ```json
 {
   "youtube_url": "https://www.youtube.com/live/NluaCVnEV7I",
-  "output_dir": "/home/ubuntu/nagrywacz/output",
-  "cookies_file": "/home/ubuntu/nagrywacz/cookies.txt",
+  "output_dir": "/home/<TWOJA_NAZWA_UZYTKOWNIKA>/nagrywacz/output",
+  "cookies_file": "/home/<TWOJA_NAZWA_UZYTKOWNIKA>/nagrywacz/cookies.txt",
   "rclone_remote": "gdrive:Kazania",
   "whisper_model": "small",
   "language": "pl",
@@ -141,12 +163,15 @@ nano config.json
 }
 ```
 
+Podmień `<TWOJA_NAZWA_UZYTKOWNIKA>` na wynik `whoami` z kroku 1.
+
 - `output_dir`: lokalny folder roboczy na serwerze (audio tymczasowo, plus
   kopia tekstu przed wysyłką) — nie musi być nigdzie synchronizowany,
   rclone i tak wyśle sam tekst na Dysk Google.
 - `whisper_model`: `small` jest szybki i wystarczająco dokładny; jeśli
-  jakość tekstu będzie za słaba, zmień na `medium` (wolniejsze — na
-  słabszym Free Tier shape'ie może być zauważalnie dłużej).
+  jakość tekstu będzie za słaba, można spróbować `medium`, ale na
+  `e2-micro` (1 vCPU, 1 GB RAM + swap) będzie to zauważalnie wolniejsze
+  — w razie problemów z pamięcią/czasem zejdź w drugą stronę, na `base`.
 - `record_duration_minutes`: jak długo nagrywać licząc od momentu
   uruchomienia (9:55). Zwiększ, jeśli msza regularnie się przeciąga.
 
